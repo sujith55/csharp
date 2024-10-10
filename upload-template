@@ -1,0 +1,94 @@
+Install-Package DocumentFormat.OpenXml
+
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
+using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Web.Http;
+
+public class ExcelUploadController : ApiController
+{
+    private const string MasterDataFilePath = "path_to_your_masterData.json";
+
+    [HttpPost]
+    [Route("api/upload")]
+    public async Task<IHttpActionResult> UploadExcel([FromBody] byte[] fileBytes)
+    {
+        if (fileBytes == null || fileBytes.Length == 0)
+        {
+            return BadRequest("No file uploaded.");
+        }
+
+        using (var stream = new MemoryStream(fileBytes))
+        using (var document = SpreadsheetDocument.Open(stream, false))
+        {
+            var worksheetPart = document.WorkbookPart.WorksheetParts.First();
+            var rows = worksheetPart.Worksheet.Elements<SheetData>().First().Elements<Row>();
+
+            var data = new List<TranslationData>();
+
+            foreach (var row in rows.Skip(1)) // Skip header row
+            {
+                var cells = row.Elements<Cell>().ToArray();
+                if (cells.Length < 3) continue; // Ensure there are at least 3 cells
+
+                var devKey = GetCellValue(document, cells[0]);
+                var englishTranslation = GetCellValue(document, cells[1]);
+                var languageTranslation = GetCellValue(document, cells[2]);
+
+                data.Add(new TranslationData
+                {
+                    DevKey = devKey,
+                    EnglishTranslation = englishTranslation,
+                    LanguageTranslation = languageTranslation
+                });
+            }
+
+            var masterData = LoadMasterData();
+            var result = data.Where(d => masterData.Any(m => m.DevKey == d.DevKey))
+                .Select(d => new
+                {
+                    d.DevKey,
+                    d.EnglishTranslation,
+                    d.LanguageTranslation
+                }).ToList();
+
+            var jsonResult = JsonConvert.SerializeObject(result);
+            var jsonFilePath = Path.Combine("output", "result.json");
+            await File.WriteAllTextAsync(jsonFilePath, jsonResult);
+
+            return Ok(new { Message = "File processed successfully.", OutputFilePath = jsonFilePath });
+        }
+    }
+
+    private string GetCellValue(SpreadsheetDocument document, Cell cell)
+    {
+        if (cell.DataType != null && cell.DataType.Value == CellValues.SharedString)
+        {
+            return document.WorkbookPart.SharedStringTablePart.SharedStringTable.ChildElements[int.Parse(cell.CellValue.Text)].InnerText;
+        }
+        return cell.CellValue?.Text;
+    }
+
+    private List<MasterData> LoadMasterData()
+    {
+        var json = File.ReadAllText(MasterDataFilePath);
+        return JsonConvert.DeserializeObject<List<MasterData>>(json);
+    }
+}
+
+public class TranslationData
+{
+    public string DevKey { get; set; }
+    public string EnglishTranslation { get; set; }
+    public string LanguageTranslation { get; set; }
+}
+
+public class MasterData
+{
+    public string DevKey { get; set; }
+    public string EnglishTranslation { get; set; }
+}
