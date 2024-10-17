@@ -1,0 +1,14 @@
+static void AddToNestedObject(JObject parent, string[] keys, string value)
+{
+    var currentLevel = parent;
+
+    // Use LINQ to traverse or create nested objects
+    foreach (var key in keys.Take(keys.Length - 1))
+    {
+        currentLevel[key] = currentLevel[key] ?? new JObject();
+        currentLevel = (JObject)currentLevel[key];
+    }
+
+    // Assign the value to the last key
+    currentLevel[keys.Last()] = value;
+}
