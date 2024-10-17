@@ -1,3 +1,17 @@
+var data = new List<dynamic>
+        {
+            new { devKey = "accessDenied.alertTitle", translationLanguage = "somevalue" },
+            new { devKey = "accessRequested.add.headerName", translationLanguage = "somevalueagain" },
+            new { devKey = "error", translationLanguage = "errormessage" }
+        };
+
+        var nestedObject = new JObject();
+
+        // Use LINQ to iterate and add to the nested object
+        data.ToList().ForEach(item => 
+            AddToNestedObject(nestedObject, item.devKey.Split('.'), item.translationLanguage)
+        );
+
 static void AddToNestedObject(JObject parent, string[] keys, string value)
 {
     var currentLevel = parent;
